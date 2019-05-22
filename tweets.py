@@ -1,24 +1,24 @@
 from datetime import datetime, timezone
 import time
 import random
+import json
 
 class Tweets:
 
-    def __init__(self):
+    def __init__(self, number):
         self.all_tweets = []
+        self.number = number
 
-    def process_tweets(self, data):
-        # for tweet in data:
-        for i in range(500):
-        # for i in range(len(data)):
-            tweet = data[i]
+    def process_tweets(self, file):
+        i = 0
+        for input_tweet in open(file):
+            tweet = json.loads(input_tweet)
             text = tweet["text"]
-            # ts = time.strftime(
-            #     '%Y-%m-%d %H:%M:%S', time.strptime( tweet['created_at'], 
-            #     '%a %b %d %H:%M:%S +0000 %Y'))
-            ts = datetime.strptime(tweet['created_at'],
-                    '%a %b %d %H:%M:%S +0000 %Y').replace(tzinfo=timezone.utc)
+            ts = datetime.strptime(tweet["created_at"],
+                '%a %b %d %H:%M:%S +0000 %Y').replace(tzinfo=timezone.utc)
             self.all_tweets.append((text, ts))
-        
-        # random.shuffle(self.all_tweets)
+            i += 1
+            if i >= self.number:
+                break
+    
         return self.all_tweets

@@ -7,11 +7,16 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from datetime import datetime, date
 import math
 import re
+from scipy import spatial
 
 class Processor:
     
     def __init__(self):
         self.stemmer = PorterStemmer()
+        self.tfidfVectorizer = TfidfVectorizer(
+            tokenizer=self.tweet_text_tokenizer, stop_words="english")
+        self.non_doc_tfidfVectorizer = TfidfVectorizer(
+            stop_words=None, preprocessor=self.do_nothing_pre_processor)
         self.hashtag_index = 0
         self.text_index = 0
 
@@ -60,9 +65,18 @@ class Processor:
 
         # remove first word "RT" and the second word [username]
         tokens["text"] = self.words_tokenize(tweet)[1:]
+        if "auspol" in tokens["text"]:
+            tokens["text"].remove("auspol")
         tokens["url"] = urls
         tokens["hashtag"] = hashtags
         return tokens
+
+    def tweet_text_tokenizer(self, tweet):
+        tweet = re.sub(r"@\S+", "", tweet)
+        tweet = re.sub(r"(?P<url>https?://[^\s]+)", "", tweet)
+        tweet = re.sub(r"#(\w+)", "", tweet)
+        return self.words_tokenize(tweet)[1:]
+
 
     def tfidf(self, docs):
         vectorizer = CountVectorizer()
@@ -86,21 +100,18 @@ class Processor:
 
     def docs_similarity(self, doc1, doc2):
         documents = [doc1, doc2]
-        tfidf = TfidfVectorizer(tokenizer=self.tweet_tokenize, stop_words="english").fit_transform(documents)
-        similarity = tfidf * tfidf.T
-        return (similarity.A)[0, 1]
+        tfidf = self.tfidfVectorizer.fit_transform(documents)
+        similarity = (tfidf * tfidf.T).A
+        return similarity[0, 1]
 
     def not_docs_similarity(self, vector1, vector2):
         vectors = [vector1, vector2]
-        tfidf = TfidfVectorizer(stop_words=None, preprocessor=self.do_nothing_pre_processor).fit_transform(vectors)
+        tfidf = self.non_doc_tfidfVectorizer.fit_transform(vectors)
         similarity = tfidf * tfidf.T
         return (similarity.A)[0, 1]
 
     def hashtag_url_similarity(self, vector, cluster_vector):
-        similar = False
-        for item in vector:
-            if item in cluster_vector:
-                similar = True
+        similar = bool(set(vector) & set(cluster_vector))
         
         return similar
 
@@ -119,40 +130,40 @@ class Processor:
 
         variance = cluster.compute_time_variance()
         gaussian_parameter = math.exp(-(time * time) / 2 * variance)
-        similarity = similarity * gaussian_parameter
 
-        return similarity
+        return similarity * gaussian_parameter
 
     # TODO: if there is a match url/hashtag in the cluster, give it a score of 1
     #       this should also avoid the current problem of EMPTY VOCABULARY
     # NOTICE: doc1["hashtag"] and doc1["url"] are now lists not str
     def new_triple_similarity(self, doc1, doc2):
-        text_similarity = self.docs_similarity(doc1["text"], doc2["text"])
-
         if doc1["hashtag"] != [] and doc2["hashtag"] != []:
             hashtag_similar = self.hashtag_url_similarity(doc1["hashtag"], doc2["hashtag"])
         else:
             hashtag_similar = False
 
-        # if doc1["url"] != [] and doc2["url"] != []:
-        #     url_similar = self.hashtag_url_similarity(
-        #         doc1["url"], doc2["url"])
-        # else:
-        #     url_similar = False
-
-        # if hashtag_similar or url_similar:
         if hashtag_similar:
-            # print("# and URL")
-            self.hashtag_index += 1
             return 1
-        # elif not hashtag_similar and not url_similar:
-        #     # print("Not # and Not URL")
-        #     return text_similarity
-        # else:
-        #     # Only URL similar
-        #     return 0.5 + 0.5 * text_similarity
         else:
+            text_similarity = self.docs_similarity(doc1["text"], doc2["text"])
             return text_similarity
+
+    def doc2vec_double_similarity(self, doc1, doc2, tweet_dbow_vector, cluster):
+        if doc1["hashtag"] != [] and doc2["hashtag"] != []:
+            hashtag_similar = self.hashtag_url_similarity(
+                doc1["hashtag"], doc2["hashtag"])
+        else:
+            hashtag_similar = False
+
+        if hashtag_similar:
+            return 1
+        else:
+            cluster_dbow_vector = cluster.get_doc2vec_vector()
+            similarity = spatial.distance.cosine(
+                tweet_dbow_vector, cluster_dbow_vector)
+            similarity = 1 - similarity
+
+            return similarity
 
     def text_hashtag_url_similarity(self, alpha, beta, gamma, doc1, doc2):
         if beta != 0 and gamma != 0:
