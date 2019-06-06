@@ -9,8 +9,18 @@ import operator
 import time
 
 def main():
+    if int(sys.argv[5]) == 1:
+        enable_time_relevancy = True
+    else:
+        enable_time_relevancy = False
+
+    if int(sys.argv[6]) == 1:
+        enable_hashtag_similarity = True
+    else:
+        enable_hashtag_similarity = False
+
     E = float(sys.argv[2])
-    word_processor = processor.Processor()
+    word_processor = processor.Processor(enable_hashtag_similarity)
     tweets_api = tweets.Tweets(int(sys.argv[4]))
 
     all_tweets = tweets_api.process_tweets(sys.argv[1])
@@ -73,6 +83,10 @@ def main():
                 continue
                 # print(new_token)
                 # print(vector)
+
+            if enable_time_relevancy:
+                similarity = word_processor.modified_similarity(
+                    similarity, all_tweets[i][1], single_cluster)
 
             # print("Similarity: %f" % (similarity))
             if similarity >= E:
@@ -146,7 +160,10 @@ def main():
                 continue
 
             similarity = word_processor.docs_similarity(text, cluster_vector)
-            similarity = word_processor.modified_similarity(similarity, publish_time, single_cluster, True)
+            # similarity = word_processor.modified_similarity(similarity, publish_time, single_cluster, True)
+            # if enable_time_relevancy:
+            #     similarity = word_processor.modified_similarity(
+            #         similarity, publish_time, single_cluster, True)
 
             # if similarity >= F and similarity > max_similarity:
             if similarity >= F:

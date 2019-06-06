@@ -18,8 +18,8 @@ class News:
 
         all_news = self.newsapi.get_everything( q = 'politics',
                                                 # from_param = from_param,
-                                                from_param = '2019-04-27',
-                                                to = '2019-04-29',
+                                                from_param = '2019-05-24',
+                                                to = '2019-05-27',
                                                 sources = "abc-news-au, google-news-au",
                                                 page_size = PAGE_SIZE,
                                                 language = language)

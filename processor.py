@@ -11,7 +11,7 @@ from scipy import spatial
 
 class Processor:
     
-    def __init__(self):
+    def __init__(self, enable_hashtag_similarity):
         self.stemmer = PorterStemmer()
         self.tfidfVectorizer = TfidfVectorizer(
             tokenizer=self.tweet_text_tokenizer, stop_words="english")
@@ -19,6 +19,7 @@ class Processor:
             stop_words=None, preprocessor=self.do_nothing_pre_processor)
         self.hashtag_index = 0
         self.text_index = 0
+        self.enable_hashtag_similarity = enable_hashtag_similarity
 
     # tokenize sentences
     def sentences_tokenize(self, doc):
@@ -137,15 +138,16 @@ class Processor:
     #       this should also avoid the current problem of EMPTY VOCABULARY
     # NOTICE: doc1["hashtag"] and doc1["url"] are now lists not str
     def new_triple_similarity(self, doc1, doc2):
-        if doc1["hashtag"] != [] and doc2["hashtag"] != []:
-            hashtag_similar = self.hashtag_url_similarity(doc1["hashtag"], doc2["hashtag"])
+        if self.enable_hashtag_similarity:
+            if doc1["hashtag"] != [] and doc2["hashtag"] != []:
+                hashtag_similar = self.hashtag_url_similarity(doc1["hashtag"], doc2["hashtag"])
         else:
             hashtag_similar = False
 
+        text_similarity = self.docs_similarity(doc1["text"], doc2["text"])
         if hashtag_similar:
-            return 1
+            return 0.2 + text_similarity
         else:
-            text_similarity = self.docs_similarity(doc1["text"], doc2["text"])
             return text_similarity
 
     def doc2vec_double_similarity(self, doc1, doc2, tweet_dbow_vector, cluster):

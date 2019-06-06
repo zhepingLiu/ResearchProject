@@ -11,13 +11,24 @@ from scipy import spatial
 import time
 
 def main():
+    # Settings
+    if int(sys.argv[5]) == 1:
+        enable_time_relevancy = True
+    else:
+        enable_time_relevancy = False
+
+    if int(sys.argv[6]) == 1:
+        enable_hashtag_similarity = True
+    else:
+        enable_hashtag_similarity = False
+
     E = float(sys.argv[2])
     # model = Doc2Vec.load("./enwiki_dbow/doc2vec.bin")
     # print("Starts loading the model.")
     doc2vec_model = Doc2VecModel()
     model = doc2vec_model.get_model()
     # print("Model loaded.")
-    word_processor = processor.Processor()
+    word_processor = processor.Processor(enable_hashtag_similarity)
     tweets_api = tweets.Tweets(int(sys.argv[4]))
 
     # print("Starts loading the dataset")
@@ -56,6 +67,7 @@ def main():
         token = all_tokens[i]
         for j in range(len(all_clusters)):
             vector = all_clusters[j].get_vector(False)
+            single_cluster = all_clusters[j]
             # no common words between the tweet and the cluster, skip
             if not intersection(vector["text"], token["text"]) and \
                 not intersection(vector["hashtag"], token["hashtag"]):
@@ -77,6 +89,10 @@ def main():
             tweet_dbow_vector = model.infer_vector(new_token["text"])
             similarity = word_processor.doc2vec_double_similarity(
                 new_token, vector, tweet_dbow_vector, all_clusters[j])
+
+            if enable_time_relevancy:
+                similarity = word_processor.modified_similarity(
+                    similarity, all_tweets[i][1], single_cluster)
 
             if similarity >= E:
                 tweet = all_tweets[i]
@@ -131,10 +147,18 @@ def main():
             if not intersection(cluster_vector, text):
                 continue
             similarity = word_processor.docs_similarity(text, cluster_vector)
-            similarity = word_processor.modified_similarity(
-                similarity, publish_time, single_cluster, True)
+
+            # if enable_time_relevancy:
+            #     similarity = word_processor.modified_similarity(
+            #         similarity, publish_time, single_cluster, True)
 
             if similarity >= F:
+                news_cluster_group = {}
+                # find all clusters related to the news
+                # if i not in news_cluster_group.keys():
+                #     news_cluster_group[i] = []
+                # cluster_id = single_cluster.get_id()
+                # news_cluster_group[i].append((cluster_id, similarity))
                 news_cluster_group["article"] = i
                 news_cluster_group["cluster"] = single_cluster.get_id()
                 news_cluster_group["similarity"] = similarity
@@ -142,11 +166,25 @@ def main():
                 # stop comparing with other clusters
                 break
 
+        # if news_cluster_group != {}:
+        #     related_news_clusters.append(news_cluster_group)
+
     print("Number of pairs generated in total: %d" %
           (len(related_news_clusters)))
     print("All generated pairs:")
     print(related_news_clusters)
 
+    # for related_pair in related_news_clusters:
+    #     article_id = list(related_pair.keys())[0]
+    #     print("News is below")
+    #     print(articles[article_id])
+    #     print("Tweets are below")
+    #     cluster_list = list(related_pair.values())[0]
+    #     for cluster_id, similarity in cluster_list:
+    #         for k in range(len(all_clusters[cluster_id].get_all_tweets())):
+    #             print("[%d]: %s: " %
+    #                 (k, all_clusters[cluster_id].get_all_tweets()[k]))
+    #         print("---------------------------------------------------")
     for related_pair in related_news_clusters:
         print("News below")
         article_id = related_pair["article"]
